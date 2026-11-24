@@ -1,0 +1,11 @@
+[tools]
+actionlint = "1.7.12"
+shellcheck = "0.11.0"
+yq = "4.54.3"
+
+[tasks.check]
+shell = "bash -euo pipefail -c"
+run = [
+  "actionlint",
+  "yq '.runs.steps[].run' action.yml | shellcheck --shell=bash -",
+]

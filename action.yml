@@ -1,0 +1,157 @@
+name: Release from Conventional Commits
+description: Calculates the next semantic version from Git tags and Conventional Commits, writes it into your version files with a commit and push, and creates a GitHub release.
+
+inputs:
+  write_version:
+    description: Bash script that writes $VERSION, the next version without a leading v, into the repository's files for the release commit. When empty, the release commits nothing and pushes only the tag.
+  bump_type:
+    description: Bump to apply, one of major, minor or patch. When empty, derived from the subjects of the commits since the last version.
+  create_github_release:
+    description: Whether to create the GitHub release for the pushed tag, with generated notes. Set it to false when a later job creates the release with files.
+    default: "true"
+  no_release_types:
+    description: Space-separated Conventional Commit types whose commits add no bump when bump_type is empty, unless marked breaking with !. Set it empty so that every commit bumps at least the patch version.
+    default: build ci docs refactor style test
+
+outputs:
+  last_version:
+    description: Version to bump, from the highest vX.Y.Z tag in the history or 0.0.0, without a leading v, such as 1.2.3.
+    value: ${{ steps.last.outputs.last_version }}
+  next_version:
+    description: Last version with the bump applied, without a leading v, such as 1.3.0. Empty when nothing is released.
+    value: ${{ steps.next.outputs.next_version }}
+  next_tag:
+    description: Next version with a leading v, such as v1.3.0. Empty when nothing is released.
+    value: ${{ steps.next.outputs.next_tag }}
+  bump_type:
+    description: Bump that was applied, one of major, minor or patch. Empty when nothing is released.
+    value: ${{ steps.bump.outputs.bump_type }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check branch
+      shell: bash
+      env:
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      run: |
+        set -euo pipefail
+        if [[ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]]; then
+          echo "::error::The action releases only from the default branch '$DEFAULT_BRANCH', not from '$GITHUB_REF'"
+          exit 1
+        fi
+
+    - name: Check history
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ "$(git rev-parse --is-shallow-repository)" == true ]]; then
+          echo "::error::The action reads the tags and the commits since the last version from the full history; check out with fetch-depth: 0"
+          exit 1
+        fi
+
+    - name: Resolve last version
+      id: last
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Only a tag in HEAD's history starts a range of commits that HEAD contains.
+        tag="$(git tag --merged HEAD --sort=-version:refname | grep -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' | head -n1 || true)"
+        last="${tag#v}"
+        echo "last_tag=$tag" >>"$GITHUB_OUTPUT"
+        echo "last_version=${last:-0.0.0}" >>"$GITHUB_OUTPUT"
+
+    - name: Resolve bump type
+      id: bump
+      shell: bash
+      env:
+        INPUT_BUMP_TYPE: ${{ inputs.bump_type }}
+        INPUT_NO_RELEASE_TYPES: ${{ inputs.no_release_types }}
+        LAST_TAG: ${{ steps.last.outputs.last_tag }}
+      run: |
+        set -euo pipefail
+
+        type="$INPUT_BUMP_TYPE"
+        if [[ -z "$type" ]]; then
+          type_list='^([a-z]+( [a-z]+)*)?$'
+          if [[ ! "$INPUT_NO_RELEASE_TYPES" =~ $type_list ]]; then
+            echo "::error::no_release_types must be lowercase types separated by single spaces, got '$INPUT_NO_RELEASE_TYPES'"
+            exit 1
+          fi
+          scope='(\([^)]+\))?'
+          subjects="$(git log --format=%s "${LAST_TAG:+$LAST_TAG..}HEAD")"
+          # Types are case-insensitive: https://www.conventionalcommits.org/en/v1.0.0/#specification
+          if [[ -n "$INPUT_NO_RELEASE_TYPES" ]]; then
+            subjects="$(grep -Eiv "^(${INPUT_NO_RELEASE_TYPES// /|})$scope: " <<<"$subjects" || true)"
+          fi
+          if grep -Eiq "^[a-z]+$scope!: " <<<"$subjects"; then
+            type="major"
+          elif grep -Eiq "^feat$scope: " <<<"$subjects"; then
+            type="minor"
+          elif [[ -n "$subjects" ]]; then
+            type="patch"
+          else
+            echo "::notice::Nothing to release, since no commit since the last version bumps it"
+          fi
+        elif [[ ! "$type" =~ ^(major|minor|patch)$ ]]; then
+          echo "::error::bump_type must be major, minor, or patch, got '$INPUT_BUMP_TYPE'"
+          exit 1
+        fi
+        echo "bump_type=$type" >>"$GITHUB_OUTPUT"
+
+    - name: Compute next version
+      id: next
+      if: steps.bump.outputs.bump_type != ''
+      shell: bash
+      env:
+        LAST_VERSION: ${{ steps.last.outputs.last_version }}
+        BUMP_TYPE: ${{ steps.bump.outputs.bump_type }}
+      run: |
+        set -euo pipefail
+
+        IFS=. read -r major minor patch <<<"$LAST_VERSION"
+        case "$BUMP_TYPE" in
+          major) next="$((major + 1)).0.0" ;;
+          minor) next="$major.$((minor + 1)).0" ;;
+          patch) next="$major.$minor.$((patch + 1))" ;;
+        esac
+        echo "next_version=$next" >>"$GITHUB_OUTPUT"
+        echo "next_tag=v$next" >>"$GITHUB_OUTPUT"
+
+    - name: Write version
+      if: steps.bump.outputs.bump_type != ''
+      shell: bash
+      env:
+        VERSION: ${{ steps.next.outputs.next_version }}
+        SCRIPT: ${{ inputs.write_version }}
+      run: |
+        set -euo pipefail
+        eval "$SCRIPT"
+
+    - name: Push release commit and tag
+      if: steps.bump.outputs.bump_type != ''
+      shell: bash
+      env:
+        NEXT_VERSION: ${{ steps.next.outputs.next_version }}
+        NEXT_TAG: ${{ steps.next.outputs.next_tag }}
+      run: |
+        set -euo pipefail
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        refs=("refs/tags/$NEXT_TAG")
+        if ! git diff --quiet; then
+          git commit --all --message "chore(release): $NEXT_VERSION [skip ci]"
+          refs+=("HEAD:$GITHUB_REF")
+        fi
+        git tag --annotate "$NEXT_TAG" --message "$NEXT_TAG"
+        git push --atomic origin "${refs[@]}"
+
+    - name: Create GitHub release
+      if: steps.bump.outputs.bump_type != '' && inputs.create_github_release == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        NEXT_TAG: ${{ steps.next.outputs.next_tag }}
+      run: |
+        set -euo pipefail
+        gh release create "$NEXT_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes
