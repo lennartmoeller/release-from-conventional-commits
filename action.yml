@@ -1,5 +1,8 @@
 name: Release from Conventional Commits
 description: Releases the next semantic version from Conventional Commits.
+branding:
+  icon: tag
+  color: blue
 
 inputs:
   write_version:
