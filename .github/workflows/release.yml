@@ -1,0 +1,30 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
+          fetch-depth: 0
+
+      - name: Release next version
+        uses: ./
+        with:
+          write_version: |
+            sed -i -E "s|(lennartmoeller/release-from-conventional-commits@).*|\1v$VERSION|" README.md
+            grep -qF "lennartmoeller/release-from-conventional-commits@v$VERSION" README.md
