@@ -29,7 +29,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Release next version
-        uses: lennartmoeller/release-from-conventional-commits@v0.1.0
+        uses: lennartmoeller/release-from-conventional-commits@v0.1.1
         with:
           write_version: yq -i '.version = strenv(VERSION)' package.json
 ```
