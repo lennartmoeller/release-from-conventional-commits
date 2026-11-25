@@ -43,7 +43,7 @@ The release workflow calls the action as `./`, and its `version` job checks out 
 **Status:** active
 **Evidence:** confirmed
 **Source:** conversation 2026-11-23
-**Verification:** contradicted — the name Release from Commit, which b1b0ff0d-b377-4bb8-8405-1dc3348944b9 replaces with Release from Conventional Commits
+**Verification:** contradicted — the name Release from Commit and the repository release-from-commit, which b1b0ff0d replaces with Release from Conventional Commits in lennartmoeller/release-from-conventional-commits
 **See:** repository.md#the-action-is-named-release-from-conventional-commits — b1b0ff0d-b377-4bb8-8405-1dc3348944b9 — as of 2026-11-24
 
 The action lives in `lennartmoeller/release-from-commit`, named after its action name "Release from Commit", while `lennartmoeller/next-version` keeps serving the workflows still pinned to it until each switches, and is deleted then.
@@ -77,20 +77,20 @@ The repository begins with one commit holding the whole action and no tags, so i
 
 **Id:** b1b0ff0d-b377-4bb8-8405-1dc3348944b9
 **Type:** decision
-**Status:** needs-review
+**Status:** active
 **Evidence:** confirmed
 **Source:** conversation 2026-11-24
-**Revisit when:** the GitHub repository is renamed to release-from-conventional-commits
+**Verification:** corroborated — the repository lennartmoeller/release-from-conventional-commits exists with releases v0.1.0 to v0.1.2, and its GitHub Marketplace page answers, on 2026-11-25
 **See:** repository.md#the-action-moved-to-a-new-repository-instead-of-renaming-next-version — f4d234a9-7293-4151-8b56-58f530a9073d — as of 2026-11-24
 **See:** versioning.md#a-release-covers-every-commit-since-the-last-version-so-the-workflows-triggers-decide-when-to-release — 33407527-e9d2-4596-a6fc-6f3e3e727dd8 — as of 2026-11-24
 
-The action's `name` and the README carry "Release from Conventional Commits", replacing "Release from Commit", while the GitHub repository is still `lennartmoeller/release-from-commit` until it is renamed to `release-from-conventional-commits`.
+The action's `name`, its README and its repository carry "Release from Conventional Commits", replacing "Release from Commit": the action lives in `lennartmoeller/release-from-conventional-commits`, a new repository that took over the working tree of `lennartmoeller/release-from-commit` without its history, and `release-from-commit` is deleted once nothing depends on it.
 
 **Reason:** The maintainer finds the name truer, and the plural correct since the bump comes from every commit since the last version rather than from one commit. On 2026-11-24 the name was free on GitHub Marketplace, as an account and as a repository of the maintainer.
 
 **Rejected alternative:** Keeping "Release from Commit", which reads as releasing one commit and does not say that the commits are read as Conventional Commits.
 
-**Consequence:** Until the repository is renamed, its name differs from the action's and the README's `uses:` line names a repository that does not exist yet. The repository can be renamed without breaking a release only while no workflow calls the action, since calls to an action do not follow a repository rename.
+**Consequence:** Workflows call the action as `lennartmoeller/release-from-conventional-commits`, and it is listed on GitHub Marketplace under that name.
 
 ## The release writes its tag into the README and pushes with a deploy key
 
